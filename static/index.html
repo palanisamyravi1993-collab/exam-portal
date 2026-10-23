@@ -1,0 +1,1337 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ExamPortal - Advanced Online Assessment Platform</title>
+  <meta name="description" content="Secure, high-concurrency online examination portal with Safe Exam Browser integration, real-time proctoring, and comprehensive analytics.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50: '#eef2ff', 100: '#e0e7ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 900: '#312e81' },
+            dark: { 800: '#111827', 900: '#0a0e17', 950: '#05070c' }
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="bg-[#0a0e17] text-slate-100 min-h-screen flex flex-col">
+  <!-- Toast Notification Container -->
+  <div id="toast" class="fixed top-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-xl border border-white/10 glass-card text-sm shadow-2xl transition-all duration-300 transform translate-y-[-150%] opacity-0 pointer-events-none"></div>
+
+  <!-- Top Glass Header -->
+  <header class="glass-header sticky top-0 z-40 px-4 lg:px-8 py-3.5 flex justify-between items-center">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl gradient-btn flex items-center justify-center font-bold text-white shadow-lg">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+      </div>
+      <div>
+        <div class="font-extrabold tracking-tight text-lg gradient-text leading-none">ExamPortal</div>
+        <div class="text-[10px] text-slate-400 font-medium tracking-wider uppercase mt-0.5">Enterprise Assessment System</div>
+      </div>
+    </div>
+    <div id="user-nav" class="flex items-center gap-3"></div>
+  </header>
+
+  <!-- Main Container -->
+  <main id="app" class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 lg:p-8"></main>
+
+  <!-- Footer -->
+  <footer class="mt-auto border-t border-white/5 py-4 px-6 text-center text-xs text-slate-500 flex flex-wrap justify-between items-center gap-2">
+    <div>Secure Assessment Engine &bull; Rate Limit: 100 req/hr &bull; Safe Exam Browser Ready</div>
+    <div class="flex items-center gap-3">
+      <button onclick="openApiConfig()" class="hover:text-indigo-400 transition-colors flex items-center gap-1">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+        Backend URL (<span id="api-status" class="text-emerald-400">Direct</span>)
+      </button>
+    </div>
+  </footer>
+
+  <!-- Modal Container for Sheets and Dialogs -->
+  <div id="modal-container"></div>
+
+  <script>
+    // ---------- State & Configuration ----------
+    const $ = s => document.querySelector(s);
+    const A = $('#app');
+    let T = localStorage.getItem('portal_token');
+    let U = JSON.parse(localStorage.getItem('portal_user') || 'null');
+    let API_BASE = localStorage.getItem('portal_api_base') || '';
+
+    // Update status indicator
+    function updateApiStatus() {
+      const el = $('#api-status');
+      if (el) el.textContent = API_BASE ? API_BASE.replace(/^https?:\/\//, '') : 'Default';
+    }
+
+    function notify(msg, type='info') {
+      const el = $('#toast');
+      const colors = {
+        info: 'bg-indigo-950/90 text-indigo-200 border-indigo-700/50',
+        success: 'bg-emerald-950/90 text-emerald-200 border-emerald-700/50',
+        warning: 'bg-amber-950/90 text-amber-200 border-amber-700/50',
+        error: 'bg-rose-950/90 text-rose-200 border-rose-700/50'
+      };
+      el.className = `fixed top-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-xl border text-sm shadow-2xl transition-all duration-300 transform translate-y-0 opacity-100 ${colors[type] || colors.info}`;
+      el.innerHTML = `<span>${esc(msg)}</span>`;
+      setTimeout(() => {
+        el.className += ' translate-y-[-150%] opacity-0 pointer-events-none';
+      }, 3500);
+    }
+
+    async function api(path, opts = {}) {
+      const headers = { Authorization: T ? 'Bearer ' + T : '' };
+      if (opts.body && !(opts.body instanceof FormData)) {
+        headers['Content-Type'] = 'application/json';
+        opts.body = JSON.stringify(opts.body);
+      }
+      const url = (API_BASE ? API_BASE.replace(/\/$/, '') : '') + '/api' + path;
+      try {
+        const res = await fetch(url, { ...opts, headers });
+        if (res.status === 401 && T) {
+          notify('Session expired. Please sign in again.', 'warning');
+          logout();
+          return;
+        }
+        if (res.status === 429) {
+          const rlData = await res.json().catch(() => ({}));
+          notify(rlData.detail || 'Rate limit exceeded (100 req/hr). Please wait.', 'error');
+          throw rlData;
+        }
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          notify(json.detail || 'Server error occurred', 'error');
+          throw json;
+        }
+        return json;
+      } catch (err) {
+        if (err.message && err.message.includes('Failed to fetch')) {
+          notify('Cannot connect to API server at ' + (API_BASE || window.location.origin), 'error');
+        }
+        throw err;
+      }
+    }
+
+    async function downloadFile(path, filename) {
+      const url = (API_BASE ? API_BASE.replace(/\/$/, '') : '') + '/api' + path;
+      const res = await fetch(url, { headers: { Authorization: 'Bearer ' + T } });
+      if (!res.ok) { notify('Download failed', 'error'); return; }
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+
+    const fmt = d => d ? new Date(d).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+    const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+    function logout() {
+      localStorage.removeItem('portal_token');
+      localStorage.removeItem('portal_user');
+      T = U = null;
+      renderHeader();
+      loginView();
+    }
+
+    function renderHeader() {
+      const nav = $('#user-nav');
+      if (!U) {
+        nav.innerHTML = `
+          <button onclick="demoFill('admin')" class="text-xs px-2.5 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 text-slate-300">Admin Demo</button>
+          <button onclick="demoFill('faculty1')" class="text-xs px-2.5 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 text-slate-300">Faculty Demo</button>
+          <button onclick="demoFill('21AIML001')" class="text-xs px-2.5 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 text-slate-300">Student Demo</button>
+        `;
+        return;
+      }
+      const roleBadges = {
+        admin: 'badge-rose',
+        faculty: 'badge-indigo',
+        student: 'badge-emerald'
+      };
+      nav.innerHTML = `
+        <div class="flex items-center gap-3">
+          <div class="text-right hidden sm:block">
+            <div class="text-sm font-semibold text-white leading-tight">${esc(U.name)}</div>
+            <div class="text-[11px] text-slate-400">${esc(U.role.toUpperCase())}${U.klass ? ' &bull; ' + esc(U.klass) : ''}</div>
+          </div>
+          <span class="badge ${roleBadges[U.role] || 'badge-slate'}">${esc(U.role)}</span>
+          <button onclick="logout()" class="text-xs px-3 py-1.5 rounded-lg border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 transition-colors">Sign out</button>
+        </div>
+      `;
+    }
+
+    function openApiConfig() {
+      const val = prompt('Configure Backend API URL (Leave blank for default origin):', API_BASE);
+      if (val !== null) {
+        API_BASE = val.trim();
+        localStorage.setItem('portal_api_base', API_BASE);
+        updateApiStatus();
+        notify('API Endpoint set to: ' + (API_BASE || 'Default (relative)'), 'success');
+      }
+    }
+
+    function demoFill(u) {
+      if ($('#lu')) {
+        $('#lu').value = u;
+        $('#lp').value = u === 'admin' ? 'admin123' : (u === 'faculty1' ? 'faculty123' : 'student123');
+        notify(`Filled credentials for ${u}`, 'info');
+      }
+    }
+
+    // ---------- Auth Views ----------
+    function loginView() {
+      renderHeader();
+      A.innerHTML = `
+        <div class="max-w-4xl mx-auto mt-6 md:mt-12">
+          <div class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight mb-2">Welcome to <span class="gradient-text">ExamPortal</span></h1>
+            <p class="text-slate-400 text-sm max-w-lg mx-auto">High-integrity examination management platform with AI-ready assessment workflows and automated analytics.</p>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-6">
+            <!-- Account Login Card -->
+            <div class="glass-card p-6 md:p-8 flex flex-col justify-between">
+              <div>
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="badge badge-indigo">Registered Access</span>
+                </div>
+                <h2 class="text-xl font-bold mb-1">Account Sign In</h2>
+                <p class="text-xs text-slate-400 mb-6">Enter your institutional roll number or staff ID to continue.</p>
+                
+                <div class="space-y-4">
+                  <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1.5">Username / Roll Number</label>
+                    <input id="lu" class="modern-input w-full" placeholder="e.g. 21AIML001 or faculty1">
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1.5">Password</label>
+                    <input id="lp" type="password" class="modern-input w-full" placeholder="••••••••••••">
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-8">
+                <button id="lb" class="gradient-btn w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2">
+                  <span>Sign In to Dashboard</span>
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Public Join Card -->
+            <div class="glass-card p-6 md:p-8 flex flex-col justify-between border-indigo-500/20 bg-gradient-to-b from-indigo-950/20 to-slate-900/60">
+              <div>
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="badge badge-amber">Public / Guest Access</span>
+                </div>
+                <h2 class="text-xl font-bold mb-1">Join with Exam Code</h2>
+                <p class="text-xs text-slate-400 mb-6">No account required. Use the password provided by your instructor.</p>
+                
+                <div class="space-y-4">
+                  <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1.5">Candidate Full Name</label>
+                    <input id="jn" class="modern-input w-full" placeholder="e.g. Alex Morgan">
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1.5">Roll / Registration Number</label>
+                    <input id="jr" class="modern-input w-full" placeholder="e.g. GUEST-104">
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1.5">Exam Password Code</label>
+                    <input id="jc" class="modern-input w-full mono uppercase" placeholder="e.g. GATE2026">
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-8">
+                <button id="jb" class="w-full py-2.5 rounded-xl font-semibold text-sm bg-white/10 hover:bg-white/15 border border-white/15 text-white transition-all flex items-center justify-center gap-2">
+                  <span>Verify Code & Enter</span>
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      $('#lb').onclick = async () => {
+        const u = $('#lu').value.trim(), p = $('#lp').value;
+        if (!u || !p) { notify('Please enter both username and password', 'warning'); return; }
+        try {
+          const r = await api('/login', { method: 'POST', body: { username: u, password: p } });
+          T = r.token; U = r.user;
+          localStorage.setItem('portal_token', T);
+          localStorage.setItem('portal_user', JSON.stringify(U));
+          notify(`Welcome back, ${U.name}!`, 'success');
+          renderHeader();
+          home();
+        } catch (e) {}
+      };
+
+      $('#jb').onclick = async () => {
+        const name = $('#jn').value.trim(), roll = $('#jr').value.trim(), code = $('#jc').value.trim();
+        if (!name || !roll || !code) { notify('Name, roll number, and exam code are required', 'warning'); return; }
+        try {
+          const r = await api('/public/join', { method: 'POST', body: { name, roll, code } });
+          T = r.token; U = r.user;
+          localStorage.setItem('portal_token', T);
+          localStorage.setItem('portal_user', JSON.stringify(U));
+          notify(`Verified! Entering exam as ${U.name}`, 'success');
+          renderHeader();
+          home();
+        } catch (e) {}
+      };
+    }
+
+    function home() {
+      renderHeader();
+      if (!U) { loginView(); return; }
+      U.role === 'student' ? studentDashboard() : staffDashboard();
+    }
+
+    // ---------- Student Dashboard & Test Interface ----------
+    async function studentDashboard() {
+      try {
+        const exams = await api('/my/exams');
+        A.innerHTML = `
+          <div class="space-y-6">
+            <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-3 pb-2 border-b border-white/5">
+              <div>
+                <h1 class="text-2xl font-extrabold tracking-tight">Student Portal</h1>
+                <p class="text-xs text-slate-400">View active, upcoming, and evaluated assessments</p>
+              </div>
+              <button onclick="studentDashboard()" class="text-xs px-3 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 text-slate-300 self-start sm:self-auto flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                Refresh
+              </button>
+            </div>
+
+            ${exams.length === 0 ? `
+              <div class="glass-card p-12 text-center">
+                <div class="w-12 h-12 mx-auto rounded-full bg-slate-800 flex items-center justify-center text-slate-400 mb-3">
+                  <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+                </div>
+                <h3 class="text-base font-semibold">No Active Exams Assigned</h3>
+                <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">You currently have no scheduled assessments. If your faculty assigned one, please verify your class registration.</p>
+              </div>
+            ` : `
+              <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+                ${exams.map(e => {
+                  const isSubmitted = e.status === 'submitted';
+                  const isInProgress = e.status === 'in_progress';
+                  const now = new Date();
+                  const start = new Date(e.start);
+                  const end = new Date(e.end);
+                  const isOpen = now >= start && now <= end;
+
+                  return `
+                    <div class="glass-card p-5 flex flex-col justify-between">
+                      <div>
+                        <div class="flex items-center justify-between gap-2 mb-3">
+                          <span class="badge ${isSubmitted ? 'badge-slate' : (isInProgress ? 'badge-amber' : 'badge-emerald')}">
+                            ${isSubmitted ? 'Completed' : (isInProgress ? 'In Progress' : 'Live')}
+                          </span>
+                          <span class="text-xs text-slate-400 font-medium">${e.duration} mins &bull; ${e.total} marks</span>
+                        </div>
+                        <h3 class="font-bold text-base text-white mb-1">${esc(e.title)}</h3>
+                        <div class="text-xs text-indigo-400 font-medium mb-3">${esc(e.subject || 'General Assessment')}</div>
+                        
+                        <div class="text-xs text-slate-400 space-y-1 mb-4 bg-slate-900/50 p-3 rounded-lg border border-white/5">
+                          <div class="flex justify-between"><span>Window Open:</span> <span class="text-slate-300 font-medium">${fmt(e.start)}</span></div>
+                          <div class="flex justify-between"><span>Deadline:</span> <span class="text-slate-300 font-medium">${fmt(e.end)}</span></div>
+                          <div class="flex justify-between"><span>Pass Standard:</span> <span class="text-slate-300 font-medium">${e.pass_pct}%</span></div>
+                          ${e.seb_required ? `<div class="text-rose-400 font-semibold pt-1 border-t border-white/5">Safe Exam Browser Required</div>` : ''}
+                        </div>
+                      </div>
+
+                      <div>
+                        ${isSubmitted ? `
+                          ${e.score != null ? `
+                            <div class="p-3 rounded-xl ${e.passed ? 'bg-emerald-950/40 border-emerald-500/30' : 'bg-rose-950/40 border-rose-500/30'} border text-center mb-3">
+                              <div class="text-[11px] uppercase tracking-wider font-semibold ${e.passed ? 'text-emerald-400' : 'text-rose-400'}">${e.passed ? 'Result: Passed' : 'Result: Needs Review'}</div>
+                              <div class="text-xl font-extrabold text-white mt-0.5">${e.score} <span class="text-xs font-normal text-slate-400">/ ${e.total}</span></div>
+                            </div>
+                          ` : `
+                            <div class="p-3 rounded-xl bg-slate-800/40 border border-white/5 text-center text-xs text-slate-400 mb-3">
+                              Answers recorded. Results pending publication.
+                            </div>
+                          `}
+                        ` : `
+                          <button onclick="startExam(${e.id}, '${esc(e.title)}')" class="w-full py-2.5 rounded-xl font-semibold text-sm ${isInProgress ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'gradient-btn'} flex items-center justify-center gap-2">
+                            <span>${isInProgress ? 'Resume Assessment' : 'Start Assessment'}</span>
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                          </button>
+                        `}
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            `}
+          </div>
+        `;
+      } catch (err) {}
+    }
+
+    let S_EXAM = null, CUR_Q = 0, TICK_TIMER = null, VIOLATION_COUNT = 0;
+
+    async function startExam(eid, title) {
+      if (!confirm(`Ready to start "${title}"?\n\n• Exam is timed and will automatically submit at the deadline.\n• Window blur and tab switching are monitored for academic integrity.\n• You can mark questions for review and jump freely.`)) {
+        return;
+      }
+      try {
+        S_EXAM = await api('/exams/' + eid + '/start', { method: 'POST' });
+        CUR_Q = 0;
+        VIOLATION_COUNT = 0;
+        S_EXAM.clockOffset = new Date(S_EXAM.server_now) - Date.now();
+
+        // Anti-cheat proctoring listeners
+        window.addEventListener('blur', logProctorEvent);
+        document.addEventListener('visibilitychange', () => {
+          if (document.hidden) logProctorEvent('tab_hidden');
+        });
+
+        renderExamRoom();
+        clearInterval(TICK_TIMER);
+        TICK_TIMER = setInterval(examTimerTick, 1000);
+      } catch (err) {}
+    }
+
+    function logProctorEvent(evType = 'window_blur') {
+      if (!S_EXAM || !S_EXAM.attempt) return;
+      VIOLATION_COUNT++;
+      notify(`Warning: Focus lost. Event logged for proctor inspection.`, 'warning');
+      api(`/attempts/${S_EXAM.attempt}/event`, { method: 'POST', body: { e: typeof evType === 'string' ? evType : 'window_blur' } }).catch(() => {});
+    }
+
+    function examTimerTick() {
+      if (!S_EXAM) return;
+      const remainingMs = new Date(S_EXAM.deadline) - (Date.now() + S_EXAM.clockOffset);
+      if (remainingMs <= 0) {
+        clearInterval(TICK_TIMER);
+        notify('Time has expired! Submitting answers...', 'warning');
+        finishExam(true);
+        return;
+      }
+      const mins = Math.floor(remainingMs / 60000);
+      const secs = Math.floor((remainingMs % 60000) / 1000);
+      const timerEl = $('#exam-timer');
+      if (timerEl) {
+        timerEl.textContent = `${mins}:${String(secs).padStart(2, '0')}`;
+        if (mins < 2) {
+          timerEl.className = 'mono font-extrabold text-base pulse-warning';
+        } else if (mins < 10) {
+          timerEl.className = 'mono font-extrabold text-base text-amber-400';
+        } else {
+          timerEl.className = 'mono font-extrabold text-base text-emerald-400';
+        }
+      }
+    }
+
+    function renderExamRoom() {
+      const q = S_EXAM.questions[CUR_Q];
+      const ans = S_EXAM.answers[q.id];
+      const isFlagged = (S_EXAM.flags || []).includes(q.id);
+
+      let answerUI = '';
+      if (q.qtype === 'MCQ' || q.qtype === 'TF') {
+        answerUI = `
+          <div class="space-y-2.5 mt-4">
+            ${q.options.map((opt, idx) => {
+              const key = q.qtype === 'TF' ? opt : 'ABCD'[idx];
+              const isSelected = String(ans).trim().toLowerCase() === String(key).trim().toLowerCase();
+              return `
+                <div onclick="selectAnswer('${key}')" class="option-card ${isSelected ? 'selected' : ''}">
+                  <div class="w-6 h-6 rounded-lg ${isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 border border-white/10'} flex items-center justify-center font-bold text-xs">
+                    ${q.qtype === 'TF' ? (idx === 0 ? 'T' : 'F') : key}
+                  </div>
+                  <div class="text-sm text-slate-200 flex-1">${esc(opt)}</div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `;
+      } else if (q.qtype === 'MSQ') {
+        const selectedArr = Array.isArray(ans) ? ans : [];
+        answerUI = `
+          <div class="space-y-2.5 mt-4">
+            ${q.options.map((opt, idx) => {
+              const key = 'ABCD'[idx];
+              const isSelected = selectedArr.includes(key);
+              return `
+                <div onclick="toggleMsq('${key}')" class="option-card ${isSelected ? 'selected' : ''}">
+                  <div class="w-6 h-6 rounded-lg ${isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 border border-white/10'} flex items-center justify-center font-bold text-xs">
+                    ${key}
+                  </div>
+                  <div class="text-sm text-slate-200 flex-1">${esc(opt)}</div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `;
+      } else {
+        answerUI = `
+          <div class="mt-4">
+            <textarea id="text-ans" oninput="saveTextAnswer(this.value)" rows="${q.qtype === 'SHORT' ? 6 : 2}" class="modern-input w-full mono text-sm" placeholder="${q.qtype === 'NAT' ? 'Enter numerical answer (e.g. 0.1353 or 25)...' : (q.qtype === 'FILL' ? 'Enter accepted text answer...' : 'Type your detailed response here...')}">${esc(ans || '')}</textarea>
+          </div>
+        `;
+      }
+
+      A.innerHTML = `
+        <div class="space-y-4 max-w-6xl mx-auto">
+          <!-- Top Test Bar -->
+          <div class="glass-card p-4 flex flex-wrap justify-between items-center gap-3">
+            <div>
+              <div class="text-xs text-indigo-400 font-semibold uppercase tracking-wider">${esc(S_EXAM.subject || 'Examination')}</div>
+              <h1 class="text-lg font-bold text-white">${esc(S_EXAM.title)}</h1>
+            </div>
+            
+            <div class="flex items-center gap-4">
+              <div class="flex items-center gap-2 bg-slate-900/80 px-3.5 py-1.5 rounded-xl border border-white/10">
+                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span class="text-xs text-slate-400 font-medium">Remaining:</span>
+                <span id="exam-timer" class="mono font-extrabold text-base text-emerald-400">--:--</span>
+              </div>
+              <div id="save-status" class="text-[11px] text-slate-400 flex items-center gap-1.5 hidden sm:flex">
+                <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Saved
+              </div>
+            </div>
+          </div>
+
+          <!-- Main Exam Grid -->
+          <div class="grid lg:grid-cols-4 gap-4">
+            <!-- Question Canvas -->
+            <div class="lg:col-span-3 glass-card p-6 flex flex-col justify-between min-h-[480px]">
+              <div>
+                <div class="flex justify-between items-center gap-2 pb-3 border-b border-white/5">
+                  <div class="flex items-center gap-2">
+                    <span class="badge badge-indigo">Question ${CUR_Q + 1} of ${S_EXAM.questions.length}</span>
+                    <span class="badge badge-slate">${q.qtype}</span>
+                  </div>
+                  <div class="text-xs text-slate-400 font-medium">
+                    +${q.marks} Mark(s) ${q.neg ? `<span class="text-rose-400">(&minus;${+q.neg.toFixed(2)} neg)</span>` : ''}
+                  </div>
+                </div>
+
+                <div class="py-5 text-base md:text-lg text-slate-100 font-medium leading-relaxed">
+                  ${esc(q.text)}
+                </div>
+
+                ${answerUI}
+              </div>
+
+              <div class="pt-6 mt-6 border-t border-white/5 flex flex-wrap justify-between items-center gap-2">
+                <div class="flex gap-2">
+                  <button onclick="navQuestion(-1)" ${CUR_Q === 0 ? 'disabled' : ''} class="px-4 py-2 rounded-xl text-xs font-semibold border border-white/10 hover:bg-white/5 disabled:opacity-30 disabled:pointer-events-none">
+                    &larr; Previous
+                  </button>
+                  <button onclick="navQuestion(1)" ${CUR_Q === S_EXAM.questions.length - 1 ? 'disabled' : ''} class="px-4 py-2 rounded-xl text-xs font-semibold border border-white/10 hover:bg-white/5 disabled:opacity-30 disabled:pointer-events-none">
+                    Next &rarr;
+                  </button>
+                  <button onclick="clearCurrentAnswer()" class="px-3 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white transition-colors">
+                    Clear Answer
+                  </button>
+                </div>
+
+                <div class="flex gap-2">
+                  <button onclick="toggleFlag()" class="px-3.5 py-2 rounded-xl text-xs font-semibold ${isFlagged ? 'bg-amber-600 text-white' : 'border border-amber-500/30 text-amber-300 hover:bg-amber-500/10'} flex items-center gap-1.5 transition-all">
+                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M3 6a3 3 0 013-3h10a1 1 0 01.8 1.6L14.25 8l2.55 3.4A1 1 0 0116 13H6a1 1 0 00-1 1v3a1 1 0 11-2 0V6z"></path></svg>
+                    ${isFlagged ? 'Flagged for Review' : 'Mark for Review'}
+                  </button>
+                  <button onclick="confirmSubmitModal()" class="gradient-btn px-5 py-2 rounded-xl text-xs font-bold shadow-lg">
+                    Submit Exam
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Question Palette Sidebar -->
+            <div class="glass-card p-5 flex flex-col justify-between">
+              <div>
+                <h3 class="font-bold text-sm text-white mb-3">Question Palette</h3>
+                <div class="grid grid-cols-5 gap-2">
+                  ${S_EXAM.questions.map((item, idx) => {
+                    const isAnswered = S_EXAM.answers[item.id] != null && String(S_EXAM.answers[item.id]).length > 0;
+                    const flagged = (S_EXAM.flags || []).includes(item.id);
+                    const isCurrent = idx === CUR_Q;
+
+                    let colorClass = 'bg-slate-800 text-slate-300 border-white/5';
+                    if (flagged) {
+                      colorClass = 'bg-amber-500/20 text-amber-300 border-amber-500/40';
+                    } else if (isAnswered) {
+                      colorClass = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
+                    }
+
+                    return `
+                      <button onclick="jumpQuestion(${idx})" class="palette-btn border ${colorClass} ${isCurrent ? 'palette-active' : ''}">
+                        ${idx + 1}
+                      </button>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+
+              <div class="mt-6 pt-4 border-t border-white/5 space-y-2 text-[11px] text-slate-400">
+                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-emerald-500/30 border border-emerald-500"></span> Answered</div>
+                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-amber-500/30 border border-amber-500"></span> Marked for Review</div>
+                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-slate-800 border border-white/10"></span> Unanswered</div>
+                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded border-2 border-white"></span> Current Question</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      examTimerTick();
+    }
+
+    async function syncSave() {
+      if (!S_EXAM || !S_EXAM.attempt) return;
+      const statusEl = $('#save-status');
+      if (statusEl) statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span> Saving...`;
+      try {
+        await api('/attempts/' + S_EXAM.attempt, {
+          method: 'PUT',
+          body: { answers: S_EXAM.answers, flags: S_EXAM.flags }
+        });
+        if (statusEl) statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span> Saved`;
+      } catch (err) {}
+    }
+
+    function selectAnswer(val) {
+      S_EXAM.answers[S_EXAM.questions[CUR_Q].id] = val;
+      renderExamRoom();
+      syncSave();
+    }
+
+    function toggleMsq(key) {
+      const qid = S_EXAM.questions[CUR_Q].id;
+      const set = new Set(S_EXAM.answers[qid] || []);
+      set.has(key) ? set.delete(key) : set.add(key);
+      S_EXAM.answers[qid] = [...set].sort();
+      renderExamRoom();
+      syncSave();
+    }
+
+    function saveTextAnswer(text) {
+      const qid = S_EXAM.questions[CUR_Q].id;
+      S_EXAM.answers[qid] = text;
+      syncSave();
+    }
+
+    function clearCurrentAnswer() {
+      const qid = S_EXAM.questions[CUR_Q].id;
+      delete S_EXAM.answers[qid];
+      renderExamRoom();
+      syncSave();
+    }
+
+    function toggleFlag() {
+      const qid = S_EXAM.questions[CUR_Q].id;
+      if (!S_EXAM.flags) S_EXAM.flags = [];
+      const idx = S_EXAM.flags.indexOf(qid);
+      idx < 0 ? S_EXAM.flags.push(qid) : S_EXAM.flags.splice(idx, 1);
+      renderExamRoom();
+      syncSave();
+    }
+
+    function navQuestion(delta) {
+      CUR_Q = Math.max(0, Math.min(S_EXAM.questions.length - 1, CUR_Q + delta));
+      renderExamRoom();
+    }
+
+    function jumpQuestion(idx) {
+      CUR_Q = idx;
+      renderExamRoom();
+    }
+
+    function confirmSubmitModal() {
+      const totalQ = S_EXAM.questions.length;
+      let answeredCount = 0;
+      S_EXAM.questions.forEach(q => {
+        const val = S_EXAM.answers[q.id];
+        if (val != null && String(val).length > 0) answeredCount++;
+      });
+      const unansweredCount = totalQ - answeredCount;
+      const flaggedCount = (S_EXAM.flags || []).length;
+
+      const modal = $('#modal-container');
+      modal.innerHTML = `
+        <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div class="glass-card max-w-md w-full p-6 space-y-4">
+            <h3 class="text-xl font-bold text-white">Confirm Submission</h3>
+            <p class="text-xs text-slate-300">Once submitted, you cannot change any answers for this assessment.</p>
+            
+            <div class="grid grid-cols-3 gap-2 py-3 bg-slate-900/60 p-3 rounded-xl border border-white/5 text-center">
+              <div><div class="text-lg font-bold text-emerald-400">${answeredCount}</div><div class="text-[10px] text-slate-400 uppercase">Answered</div></div>
+              <div><div class="text-lg font-bold text-rose-400">${unansweredCount}</div><div class="text-[10px] text-slate-400 uppercase">Unanswered</div></div>
+              <div><div class="text-lg font-bold text-amber-400">${flaggedCount}</div><div class="text-[10px] text-slate-400 uppercase">Flagged</div></div>
+            </div>
+
+            ${unansweredCount > 0 ? `<p class="text-xs text-rose-400 font-medium">Notice: You have ${unansweredCount} unanswered question(s).</p>` : ''}
+
+            <div class="flex justify-end gap-2 pt-2">
+              <button onclick="$('#modal-container').innerHTML = ''" class="px-4 py-2 rounded-xl text-xs font-semibold border border-white/10 hover:bg-white/5 text-slate-300">
+                Continue Test
+              </button>
+              <button onclick="finishExam(false)" class="gradient-btn px-4 py-2 rounded-xl text-xs font-bold">
+                Yes, Submit Now
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function finishExam(isAuto = false) {
+      $('#modal-container').innerHTML = '';
+      clearInterval(TICK_TIMER);
+      try {
+        const res = await api('/attempts/' + S_EXAM.attempt + '/submit', {
+          method: 'POST',
+          body: { answers: S_EXAM.answers }
+        });
+        S_EXAM = null;
+        A.innerHTML = `
+          <div class="max-w-lg mx-auto mt-12 glass-card p-8 text-center space-y-4">
+            <div class="w-16 h-16 mx-auto rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
+              <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+            </div>
+            <h2 class="text-2xl font-bold text-white">Assessment Submitted!</h2>
+            <p class="text-xs text-slate-400">Your responses have been successfully finalized and securely stored${isAuto ? ' (auto-submitted due to timer expiration)' : ''}.</p>
+            <div class="pt-4">
+              <button onclick="home()" class="gradient-btn px-6 py-2.5 rounded-xl font-bold text-xs">
+                Back to Dashboard
+              </button>
+            </div>
+          </div>
+        `;
+      } catch (err) {}
+    }
+
+    // ---------- Faculty & Staff Dashboard ----------
+    async function staffDashboard() {
+      try {
+        const exams = await api('/exams');
+        A.innerHTML = `
+          <div class="space-y-6">
+            <!-- Header with Quick Action -->
+            <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-4 pb-2 border-b border-white/5">
+              <div>
+                <h1 class="text-2xl font-extrabold tracking-tight">Faculty Assessment Hub</h1>
+                <p class="text-xs text-slate-400">Manage online exams, question banks, candidate allocations, and real-time grading</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <button onclick="openExamCreator()" class="gradient-btn px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-lg">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                  New Examination
+                </button>
+              </div>
+            </div>
+
+            <!-- Stats Overview Cards -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div class="glass-card p-4">
+                <div class="text-[11px] text-slate-400 uppercase font-semibold">Total Exams</div>
+                <div class="text-2xl font-extrabold text-white mt-1">${exams.length}</div>
+              </div>
+              <div class="glass-card p-4">
+                <div class="text-[11px] text-slate-400 uppercase font-semibold">Published Live</div>
+                <div class="text-2xl font-extrabold text-emerald-400 mt-1">${exams.filter(x => x.published).length}</div>
+              </div>
+              <div class="glass-card p-4">
+                <div class="text-[11px] text-slate-400 uppercase font-semibold">Safe Exam Browser</div>
+                <div class="text-2xl font-extrabold text-indigo-400 mt-1">${exams.filter(x => x.seb_required).length}</div>
+              </div>
+              <div class="glass-card p-4">
+                <div class="text-[11px] text-slate-400 uppercase font-semibold">Total Candidates</div>
+                <div class="text-2xl font-extrabold text-amber-400 mt-1">${exams.reduce((acc, curr) => acc + (curr.assigned || 0), 0)}</div>
+              </div>
+            </div>
+
+            <!-- Exam List -->
+            <div>
+              <h2 class="text-lg font-bold text-white mb-3">All Examinations</h2>
+              <div class="space-y-3">
+                ${exams.map(e => `
+                  <div class="glass-card p-5 flex flex-col md:flex-row justify-between md:items-center gap-4">
+                    <div>
+                      <div class="flex items-center gap-2 mb-1.5">
+                        <span class="badge ${e.published ? 'badge-emerald' : 'badge-slate'}">${e.published ? 'Published' : 'Draft'}</span>
+                        ${e.seb_required ? `<span class="badge badge-rose">SEB Protected</span>` : ''}
+                        ${e.public ? `<span class="badge badge-indigo">Code: ${esc(e.access_code)}</span>` : ''}
+                      </div>
+                      <h3 class="font-bold text-base text-white">${esc(e.title)}</h3>
+                      <div class="text-xs text-slate-400 mt-0.5">
+                        ${fmt(e.start)} &rarr; ${fmt(e.end)} &bull; ${e.duration} mins &bull; ${e.total} marks &bull; ${e.assigned} candidates assigned
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-2 self-start md:self-auto">
+                      <button onclick="openExamDetail(${e.id})" class="px-4 py-2 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/15 border border-white/10 text-white transition-colors">
+                        Manage & Results &rarr;
+                      </button>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+
+            <!-- Admin Section (Only if Admin) -->
+            ${U.role === 'admin' ? `
+              <div class="glass-card p-6 border-indigo-500/20">
+                <div class="flex justify-between items-center mb-4">
+                  <div>
+                    <h2 class="text-lg font-bold text-white">Institutional User Directory (Admin)</h2>
+                    <p class="text-xs text-slate-400">Import student batches, staff credentials, and manage system access</p>
+                  </div>
+                  <div class="flex gap-2">
+                    <button onclick="openUserImport()" class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-white/10 hover:bg-white/5 text-slate-200">
+                      Import CSV
+                    </button>
+                    <button onclick="loadUserManagement()" class="gradient-btn px-3 py-1.5 rounded-lg text-xs font-semibold">
+                      Manage Users
+                    </button>
+                  </div>
+                </div>
+                <div id="admin-user-list"></div>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      } catch (err) {}
+    }
+
+    function openExamCreator() {
+      const modal = $('#modal-container');
+      modal.innerHTML = `
+        <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div class="glass-card max-w-xl w-full p-6 space-y-4 my-8">
+            <div class="flex justify-between items-center pb-2 border-b border-white/5">
+              <h3 class="text-xl font-bold text-white">Create New Assessment</h3>
+              <button onclick="$('#modal-container').innerHTML = ''" class="text-slate-400 hover:text-white">&times;</button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 text-xs">
+              <div class="col-span-2">
+                <label class="block text-slate-300 font-medium mb-1">Assessment Title</label>
+                <input id="ce-title" class="modern-input w-full" placeholder="e.g. GATE Computer Science - Module I">
+              </div>
+              <div class="col-span-2 sm:col-span-1">
+                <label class="block text-slate-300 font-medium mb-1">Subject / Domain</label>
+                <input id="ce-subject" class="modern-input w-full" placeholder="e.g. Data Structures">
+              </div>
+              <div class="col-span-2 sm:col-span-1">
+                <label class="block text-slate-300 font-medium mb-1">Duration (Minutes)</label>
+                <input id="ce-duration" type="number" class="modern-input w-full" value="60">
+              </div>
+              <div>
+                <label class="block text-slate-300 font-medium mb-1">Opening Window (Start)</label>
+                <input id="ce-start" type="datetime-local" class="modern-input w-full">
+              </div>
+              <div>
+                <label class="block text-slate-300 font-medium mb-1">Closing Window (End)</label>
+                <input id="ce-end" type="datetime-local" class="modern-input w-full">
+              </div>
+              <div>
+                <label class="block text-slate-300 font-medium mb-1">Pass Standard (%)</label>
+                <input id="ce-pass" type="number" class="modern-input w-full" value="40">
+              </div>
+              <div>
+                <label class="block text-slate-300 font-medium mb-1">Shared Exam Password</label>
+                <input id="ce-code" class="modern-input w-full uppercase" placeholder="e.g. GATE2026">
+              </div>
+              <div class="col-span-2">
+                <label class="block text-slate-300 font-medium mb-1">Safe Exam Browser Key (Optional)</label>
+                <input id="ce-seb-key" class="modern-input w-full mono text-xs" placeholder="Copy SHA256 browser key from SEB settings">
+              </div>
+              <div class="col-span-2 flex items-center gap-6 pt-2">
+                <label class="flex items-center gap-2 cursor-pointer text-slate-300">
+                  <input id="ce-public" type="checkbox" class="rounded bg-slate-800 text-indigo-600 focus:ring-0">
+                  <span>Allow guest registration with password</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer text-slate-300">
+                  <input id="ce-seb" type="checkbox" class="rounded bg-slate-800 text-indigo-600 focus:ring-0">
+                  <span>Enforce Safe Exam Browser</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-4 border-t border-white/5">
+              <button onclick="$('#modal-container').innerHTML = ''" class="px-4 py-2 rounded-xl text-xs font-semibold border border-white/10 hover:bg-white/5 text-slate-300">
+                Cancel
+              </button>
+              <button onclick="saveNewExam()" class="gradient-btn px-5 py-2 rounded-xl text-xs font-bold">
+                Create Assessment
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+      // Set reasonable default start/end dates
+      const start = new Date();
+      const end = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+      $('#ce-start').value = start.toISOString().slice(0, 16);
+      $('#ce-end').value = end.toISOString().slice(0, 16);
+    }
+
+    async function saveNewExam() {
+      const title = $('#ce-title').value.trim();
+      if (!title) { notify('Assessment title is required', 'warning'); return; }
+      try {
+        await api('/exams', {
+          method: 'POST',
+          body: {
+            title,
+            subject: $('#ce-subject').value.trim(),
+            start: new Date($('#ce-start').value).toISOString(),
+            end: new Date($('#ce-end').value).toISOString(),
+            duration: parseInt($('#ce-duration').value) || 60,
+            pass_pct: parseFloat($('#ce-pass').value) || 40,
+            seb_required: $('#ce-seb').checked,
+            seb_key: $('#ce-seb-key').value.trim(),
+            access_code: $('#ce-code').value.trim(),
+            public: $('#ce-public').checked
+          }
+        });
+        $('#modal-container').innerHTML = '';
+        notify('Exam created successfully!', 'success');
+        staffDashboard();
+      } catch (err) {}
+    }
+
+    async function openExamDetail(eid) {
+      try {
+        const [exams, questions, results, analytics] = await Promise.all([
+          api('/exams'),
+          api(`/exams/${eid}/questions`),
+          api(`/exams/${eid}/results`),
+          api(`/exams/${eid}/analytics`)
+        ]);
+        const exam = exams.find(x => x.id === eid);
+
+        A.innerHTML = `
+          <div class="space-y-6">
+            <!-- Nav Header -->
+            <div class="flex items-center justify-between pb-3 border-b border-white/5">
+              <button onclick="home()" class="text-xs px-3 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 text-slate-300 flex items-center gap-1.5">
+                &larr; Back to Exams
+              </button>
+              <div class="flex items-center gap-2">
+                <button onclick="toggleExamPublish(${eid}, ${!exam.published})" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold ${exam.published ? 'bg-amber-600/30 text-amber-300 border border-amber-500/30' : 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/30'}">
+                  ${exam.published ? 'Unpublish Exam' : 'Publish Live'}
+                </button>
+                <button onclick="toggleExamResults(${eid}, ${!exam.show_results})" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold border border-white/10 hover:bg-white/5 text-slate-200">
+                  ${exam.show_results ? 'Hide Results' : 'Release Results to Students'}
+                </button>
+              </div>
+            </div>
+
+            <!-- Exam Overview Banner -->
+            <div class="glass-card p-6">
+              <div class="flex flex-wrap justify-between items-start gap-4">
+                <div>
+                  <div class="flex items-center gap-2 mb-2">
+                    <span class="badge ${exam.published ? 'badge-emerald' : 'badge-slate'}">${exam.published ? 'Live' : 'Draft'}</span>
+                    <span class="badge badge-indigo">${esc(exam.subject || 'Exam')}</span>
+                    ${exam.seb_required ? `<span class="badge badge-rose">SEB Required</span>` : ''}
+                  </div>
+                  <h1 class="text-2xl font-bold text-white">${esc(exam.title)}</h1>
+                  <p class="text-xs text-slate-400 mt-1">
+                    Duration: ${exam.duration} mins &bull; Total Marks: ${exam.total} &bull; Pass Criterion: ${exam.pass_pct}%
+                  </p>
+                </div>
+
+                <div class="flex flex-wrap gap-2">
+                  <button onclick="downloadFile('/exams/${eid}/seb', 'exam_${eid}.seb')" class="px-3 py-1.5 rounded-lg text-xs font-medium border border-white/10 hover:bg-white/5 text-slate-300">
+                    Download .seb
+                  </button>
+                  <button onclick="downloadFile('/exams/${eid}/export?fmt=xlsx', 'results_${eid}.xlsx')" class="px-3 py-1.5 rounded-lg text-xs font-medium border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10">
+                    Export Excel
+                  </button>
+                  <button onclick="downloadFile('/exams/${eid}/export?fmt=csv', 'results_${eid}.csv')" class="px-3 py-1.5 rounded-lg text-xs font-medium border border-white/10 hover:bg-white/5 text-slate-300">
+                    Export CSV
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tabs / Sections Grid -->
+            <div class="grid lg:grid-cols-3 gap-6">
+              <!-- Left Column: Assign Students & Upload Questions -->
+              <div class="space-y-6">
+                <!-- Assign Candidates -->
+                <div class="glass-card p-5 space-y-3">
+                  <h3 class="font-bold text-sm text-white">Assign Candidates</h3>
+                  <div class="flex gap-2">
+                    <button onclick="assignCandidates(${eid}, { all: true })" class="gradient-btn px-3 py-1.5 rounded-lg text-xs font-semibold flex-1">
+                      All Active Students
+                    </button>
+                  </div>
+                  <div class="pt-2 border-t border-white/5">
+                    <label class="block text-[11px] text-slate-400 mb-1">Assign by Class / Batch</label>
+                    <div class="flex gap-2">
+                      <input id="assign-klass" class="modern-input flex-1 text-xs" placeholder="e.g. II-AIML-B">
+                      <button onclick="assignCandidates(${eid}, { klass: $('#assign-klass').value.trim() })" class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-white/10 hover:bg-white/5 text-slate-200">
+                        Assign
+                      </button>
+                    </div>
+                  </div>
+                  <div class="pt-2 border-t border-white/5">
+                    <label class="block text-[11px] text-slate-400 mb-1">Assign Specific Usernames (comma separated)</label>
+                    <textarea id="assign-users" class="modern-input w-full text-xs" rows="2" placeholder="21AIML001, 21AIML002..."></textarea>
+                    <button onclick="assignSpecific(${eid})" class="w-full mt-2 px-3 py-1.5 rounded-lg text-xs font-semibold border border-white/10 hover:bg-white/5 text-slate-200">
+                      Assign Listed Usernames
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Questions Importer -->
+                <div class="glass-card p-5 space-y-3">
+                  <div class="flex justify-between items-center">
+                    <h3 class="font-bold text-sm text-white">Question Importer</h3>
+                    <button onclick="downloadFile('/template', 'question_template.xlsx')" class="text-xs text-indigo-400 hover:underline">
+                      Template (.xlsx)
+                    </button>
+                  </div>
+                  <p class="text-xs text-slate-400">Supports MCQ, MSQ, True/False, NAT (numeric), FILL, and SHORT questions.</p>
+                  <input type="file" id="q-upload" class="text-xs text-slate-400 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer">
+                  <button onclick="uploadQuestions(${eid})" class="gradient-btn w-full py-2 rounded-xl text-xs font-bold mt-2">
+                    Upload & Append Questions
+                  </button>
+                </div>
+              </div>
+
+              <!-- Right Column: Results & Analytics Table -->
+              <div class="lg:col-span-2 space-y-6">
+                <!-- Candidate Submissions Table -->
+                <div class="glass-card p-5 space-y-3">
+                  <div class="flex justify-between items-center">
+                    <h3 class="font-bold text-sm text-white">Candidate Results (${results.length})</h3>
+                    <input id="res-search" oninput="filterResultsTable()" class="modern-input text-xs w-48" placeholder="Search candidate...">
+                  </div>
+                  <div class="overflow-x-auto">
+                    <table class="w-full text-xs text-left" id="results-table">
+                      <thead>
+                        <tr class="text-slate-400 border-b border-white/10">
+                          <th class="py-2.5">Roll No.</th>
+                          <th>Name</th>
+                          <th>Status</th>
+                          <th>Score</th>
+                          <th>Result</th>
+                          <th>Flags</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-white/5">
+                        ${results.map(r => `
+                          <tr class="hover:bg-white/5 transition-colors res-row" data-search="${esc(r.username + ' ' + r.name)}">
+                            <td class="py-2.5 mono font-semibold text-white">${esc(r.username)}</td>
+                            <td class="text-slate-300">${esc(r.name)}</td>
+                            <td>
+                              <span class="badge ${r.status === 'Submitted' ? 'badge-emerald' : (r.status === 'In progress' ? 'badge-amber' : 'badge-slate')}">
+                                ${esc(r.status)}
+                              </span>
+                            </td>
+                            <td class="mono font-bold ${r.score != null ? 'text-white' : 'text-slate-500'}">
+                              ${r.score != null ? `${r.score} / ${r.total}` : '—'}
+                            </td>
+                            <td>
+                              ${r.result ? `
+                                <span class="badge ${r.result === 'Pass' ? 'badge-emerald' : 'badge-rose'}">
+                                  ${esc(r.result)}
+                                </span>
+                              ` : '—'}
+                              ${r.pending_manual ? `<span class="badge badge-amber ml-1">Pending Manual</span>` : ''}
+                            </td>
+                            <td class="text-slate-400">${r.events || 0}</td>
+                            <td>
+                              ${r.attempt_id ? `
+                                <button onclick="viewAttemptDetail(${eid}, ${r.attempt_id})" class="text-indigo-400 hover:text-indigo-300 font-medium">
+                                  Review &rarr;
+                                </button>
+                              ` : '<span class="text-slate-600">—</span>'}
+                            </td>
+                          </tr>
+                        `).join('')}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <!-- Question Analytics -->
+                <div class="glass-card p-5 space-y-3">
+                  <h3 class="font-bold text-sm text-white">Item Analytics & Accuracy</h3>
+                  <div class="space-y-2.5">
+                    ${analytics.map(item => `
+                      <div class="text-xs space-y-1">
+                        <div class="flex justify-between text-slate-300">
+                          <span><b>Q${item.q}</b>: ${esc(item.text)}</span>
+                          <span class="font-bold text-indigo-400">${item.pct_correct != null ? item.pct_correct + '%' : 'N/A'}</span>
+                        </div>
+                        <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                          <div class="bg-indigo-500 h-1.5 rounded-full" style="width: ${item.pct_correct || 0}%"></div>
+                        </div>
+                      </div>
+                    `).join('')}
+                  </div>
+                </div>
+
+                <!-- Questions Preview -->
+                <div class="glass-card p-5 space-y-3">
+                  <h3 class="font-bold text-sm text-white">Question Bank Preview (${questions.length} Questions)</h3>
+                  <div class="space-y-3 max-h-96 overflow-y-auto pr-2">
+                    ${questions.map((q, idx) => `
+                      <div class="p-3.5 rounded-xl bg-slate-900/60 border border-white/5 text-xs space-y-1.5">
+                        <div class="flex justify-between items-center text-slate-400">
+                          <span class="font-semibold text-white">Q${idx + 1} &bull; [${q.qtype}]</span>
+                          <span>+${q.marks} Mark(s) ${q.neg ? `/ -${+q.neg.toFixed(2)}` : ''}</span>
+                        </div>
+                        <p class="text-slate-200 font-medium">${esc(q.text)}</p>
+                        ${q.options && q.options.length ? `
+                          <div class="grid grid-cols-2 gap-1 text-slate-400 pt-1">
+                            ${q.options.map((o, i) => `<div><span class="font-bold text-slate-300">${'ABCD'[i]}.</span> ${esc(o)}</div>`).join('')}
+                          </div>
+                        ` : ''}
+                        <div class="pt-1 border-t border-white/5 text-emerald-400 font-semibold">
+                          Answer: ${esc(q.answer ? q.answer.join(' | ') : 'Manual Evaluation')}
+                        </div>
+                      </div>
+                    `).join('')}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      } catch (err) {}
+    }
+
+    async function toggleExamPublish(eid, val) {
+      await api('/exams/' + eid, { method: 'PATCH', body: { published: val } });
+      notify(`Exam ${val ? 'published' : 'unpublished'}!`, 'info');
+      openExamDetail(eid);
+    }
+
+    async function toggleExamResults(eid, val) {
+      await api('/exams/' + eid, { method: 'PATCH', body: { show_results: val } });
+      notify(`Results ${val ? 'released to candidates' : 'hidden'}!`, 'info');
+      openExamDetail(eid);
+    }
+
+    async function assignCandidates(eid, body) {
+      try {
+        const res = await api(`/exams/${eid}/assign`, { method: 'POST', body });
+        notify(`Assigned ${res.assigned} candidates!`, 'success');
+        openExamDetail(eid);
+      } catch (e) {}
+    }
+
+    async function assignSpecific(eid) {
+      const raw = $('#assign-users').value;
+      const usernames = raw.split(',').map(x => x.trim()).filter(Boolean);
+      if (!usernames.length) { notify('Please enter at least one username', 'warning'); return; }
+      assignCandidates(eid, { usernames });
+    }
+
+    async function uploadQuestions(eid) {
+      const file = $('#q-upload').files[0];
+      if (!file) { notify('Please select a .xlsx or .csv question file', 'warning'); return; }
+      const fd = new FormData();
+      fd.append('file', file);
+      try {
+        const res = await api(`/exams/${eid}/questions/import`, { method: 'POST', body: fd });
+        notify(`Imported ${res.imported} questions! ${res.errors.length ? '(' + res.errors.length + ' warnings)' : ''}`, 'success');
+        openExamDetail(eid);
+      } catch (e) {}
+    }
+
+    function filterResultsTable() {
+      const q = ($('#res-search').value || '').toLowerCase();
+      document.querySelectorAll('.res-row').forEach(row => {
+        const text = row.getAttribute('data-search').toLowerCase();
+        row.style.display = text.includes(q) ? '' : 'none';
+      });
+    }
+
+    // ---------- Manual Evaluation & Attempt Review ----------
+    async function viewAttemptDetail(eid, aid) {
+      try {
+        const data = await api(`/exams/${eid}/attempts/${aid}`);
+        const modal = $('#modal-container');
+        modal.innerHTML = `
+          <div class="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+            <div class="glass-card max-w-3xl w-full p-6 space-y-4 my-8">
+              <div class="flex justify-between items-center pb-2 border-b border-white/5">
+                <div>
+                  <h3 class="text-xl font-bold text-white">Student Response Sheet</h3>
+                  <div class="text-xs text-slate-400 mt-0.5">
+                    ${esc(data.student.name)} (${esc(data.student.username)}) &bull; Current Score: <span class="text-emerald-400 font-bold">${data.score}</span>
+                  </div>
+                </div>
+                <button onclick="$('#modal-container').innerHTML = ''" class="text-slate-400 hover:text-white">&times;</button>
+              </div>
+
+              <!-- Question Responses List -->
+              <div class="space-y-4 max-h-[60vh] overflow-y-auto pr-2 text-xs">
+                ${data.questions.map(q => {
+                  const isShort = q.qtype === 'SHORT';
+                  return `
+                    <div class="p-4 rounded-xl bg-slate-900/60 border border-white/5 space-y-2">
+                      <div class="flex justify-between items-center">
+                        <span class="font-bold text-white">Q${q.pos}. [${q.qtype}]</span>
+                        <span class="font-medium text-slate-400">Max Marks: ${q.marks}</span>
+                      </div>
+                      <p class="text-slate-200">${esc(q.text)}</p>
+                      
+                      <div class="p-2.5 rounded-lg bg-black/40 border border-white/5 text-slate-300">
+                        <div class="text-[10px] text-slate-500 uppercase font-semibold">Candidate Answer:</div>
+                        <div class="mt-0.5 font-medium ${q.student_answer ? 'text-white' : 'text-slate-500 italic'}">${esc(q.student_answer || 'No answer recorded')}</div>
+                      </div>
+
+                      <div class="flex justify-between items-center pt-1">
+                        <div class="text-[11px] text-emerald-400">
+                          Official Answer: ${esc(q.correct_answer ? q.correct_answer.join(' | ') : 'Subjective')}
+                        </div>
+                        <div class="flex items-center gap-2">
+                          <span class="text-slate-400">Awarded:</span>
+                          ${isShort ? `
+                            <input id="grade-q-${q.id}" type="number" step="0.5" max="${q.marks}" min="0" class="modern-input w-20 py-1 text-center font-bold" value="${q.awarded ?? 0}">
+                          ` : `
+                            <span class="mono font-bold ${q.awarded > 0 ? 'text-emerald-400' : 'text-rose-400'}">${q.awarded ?? 0}</span>
+                          `}
+                        </div>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+
+              <div class="flex justify-between items-center pt-4 border-t border-white/5">
+                <div class="text-xs text-slate-400">
+                  Proctor events recorded: <span class="font-bold text-amber-400">${data.events.length}</span>
+                </div>
+                <div class="flex gap-2">
+                  <button onclick="$('#modal-container').innerHTML = ''" class="px-4 py-2 rounded-xl text-xs font-semibold border border-white/10 hover:bg-white/5 text-slate-300">
+                    Close
+                  </button>
+                  <button onclick="submitManualGrading(${eid}, ${aid})" class="gradient-btn px-5 py-2 rounded-xl text-xs font-bold">
+                    Save Marks & Finalize
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      } catch (err) {}
+    }
+
+    async function submitManualGrading(eid, aid) {
+      const marks = {};
+      document.querySelectorAll('[id^="grade-q-"]').forEach(inp => {
+        const qid = inp.id.replace('grade-q-', '');
+        marks[qid] = parseFloat(inp.value) || 0;
+      });
+      try {
+        await api(`/exams/${eid}/attempts/${aid}/grade-manual`, {
+          method: 'POST',
+          body: { marks }
+        });
+        notify('Manual evaluation recorded successfully!', 'success');
+        $('#modal-container').innerHTML = '';
+        openExamDetail(eid);
+      } catch (err) {}
+    }
+
+    // ---------- Admin User Management ----------
+    async function loadUserManagement() {
+      try {
+        const users = await api('/users');
+        const listEl = $('#admin-user-list');
+        listEl.innerHTML = `
+          <div class="mt-4 overflow-x-auto">
+            <table class="w-full text-xs text-left">
+              <thead>
+                <tr class="text-slate-400 border-b border-white/10">
+                  <th class="py-2">User ID</th>
+                  <th>Name</th>
+                  <th>Role</th>
+                  <th>Class/Dept</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-white/5">
+                ${users.map(u => `
+                  <tr>
+                    <td class="py-2 mono font-semibold text-white">${esc(u.username)}</td>
+                    <td class="text-slate-300">${esc(u.name)}</td>
+                    <td><span class="badge ${u.role === 'admin' ? 'badge-rose' : (u.role === 'faculty' ? 'badge-indigo' : 'badge-slate')}">${u.role}</span></td>
+                    <td class="text-slate-400">${esc(u.klass || u.dept || '—')}</td>
+                    <td><span class="badge ${u.active ? 'badge-emerald' : 'badge-rose'}">${u.active ? 'Active' : 'Disabled'}</span></td>
+                    <td class="space-x-2">
+                      <button onclick="toggleUserActive(${u.id}, ${!u.active})" class="text-xs underline text-slate-400 hover:text-white">
+                        ${u.active ? 'Deactivate' : 'Activate'}
+                      </button>
+                      <button onclick="promptResetPassword(${u.id}, '${esc(u.username)}')" class="text-xs underline text-indigo-400 hover:text-indigo-300">
+                        Reset PW
+                      </button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+      } catch (e) {}
+    }
+
+    async function toggleUserActive(uid, val) {
+      await api('/users/' + uid, { method: 'PATCH', body: { active: val } });
+      notify('User status updated!', 'info');
+      loadUserManagement();
+    }
+
+    async function promptResetPassword(uid, username) {
+      const pw = prompt(`Enter new password for ${username} (min 6 characters):`);
+      if (!pw) return;
+      try {
+        await api('/users/' + uid + '/password', { method: 'PATCH', body: { password: pw } });
+        notify(`Password for ${username} updated successfully!`, 'success');
+      } catch (err) {}
+    }
+
+    function openUserImport() {
+      const f = document.createElement('input');
+      f.type = 'file';
+      f.accept = '.csv';
+      f.onchange = async () => {
+        const file = f.files[0];
+        if (!file) return;
+        const fd = new FormData();
+        fd.append('file', file);
+        try {
+          const r = await api('/users/import', { method: 'POST', body: fd });
+          notify(`Imported ${r.imported} users successfully!`, 'success');
+          loadUserManagement();
+        } catch (e) {}
+      };
+      f.click();
+    }
+
+    // Initialize application
+    updateApiStatus();
+    T && U ? home() : loginView();
+  </script>
+</body>
+</html>

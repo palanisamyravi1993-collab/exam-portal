@@ -1,0 +1,10 @@
+name = "exam-portal-backend"
+main = "main.py"
+compatibility_date = "2024-04-03"
+compatibility_flags = ["python_workers"]
+
+[vars]
+RATE_LIMIT_PER_HOUR = "100"
+PUBLIC_URL = "https://exam-portal-backend.workers.dev"
+CORS_ORIGINS = "*"
+SECRET_KEY = "exam_portal_super_secret_production_key_2026_aiml_ciat"
