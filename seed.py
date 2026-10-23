@@ -52,6 +52,11 @@ for t,q,o,a,m in QB: QS.append((t,q,o,a.split(","),m,(m/3 if t=="MCQ" else 0)))
 def seed(s, hash_pw, User, Exam, Question):
     users = [("admin", "Administrator", "admin", "admin123", ""), ("faculty1", "Dr. Faculty", "faculty", "faculty123", "")]
     users += [(f"21AIML{i:03d}", f"Student {i}", "student", "student123", "II-AIML-B") for i in range(1, 6)]
+    # Student batch 25AM064 to 25AM127
+    users += [(f"25AM{i:03d}", f"Student 25AM{i:03d}", "student", "student123", "I-AIML") for i in range(64, 128)]
+    # Lateral entry logins
+    laterals = ["26AML08", "26AML09", "26AML10", "26AML11"]
+    users += [(lat, f"Student {lat}", "student", "student123", "II-AIML-Lateral") for lat in laterals]
     for u, n, r, p, k in users: s.add(User(username=u, name=n, role=r, pw=hash_pw(p), klass=k, dept="AIML"))
     s.commit()
     fac = s.query(User).filter_by(username="faculty1").one()
@@ -61,3 +66,4 @@ def seed(s, hash_pw, User, Exam, Question):
     s.add(e); s.commit()
     for i, (t, q, o, a, m, n) in enumerate(QS, 1): s.add(Question(exam_id=e.id, pos=i, text=q, qtype=t, options=o, answer=a, marks=m, neg=n, subject="Probability" if i<14 else "Data Structures"))
     s.commit()
+
