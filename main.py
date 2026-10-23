@@ -492,25 +492,24 @@ def seb_file(eid: int, u=Depends(staff), s: Session = Depends(db)):
 # ---------- Student Exam Flow ----------
 def assigned_exam(eid, u, s):
     e = s.get(Exam, eid)
-    if not e or not e.published or u.id not in (e.assigned or []):
-        raise HTTPException(404, "Exam not available")
+    if not e or not e.published:
+        raise HTTPException(404, "Exam not available or not published")
     return e
 
 @app.get("/api/my/exams")
 def my_exams(u=Depends(me), s: Session = Depends(db)):
     out = []
     for e in s.query(Exam).filter_by(published=True):
-        if u.id in (e.assigned or []):
-            at = s.query(Attempt).filter_by(exam_id=e.id, user_id=u.id).first()
-            if at: expire(at, s)
-            o = exam_out(e, s)
-            o["status"] = "submitted" if at and at.submitted else ("in_progress" if at else "new")
-            o["attempt"] = at.id if at else None
-            if at and at.submitted and e.show_results:
-                o["score"] = at.score
-                o["passed"] = at.score >= (e.pass_pct / 100 * o["total"])
-                o["pending"] = at.pending
-            out.append(o)
+        at = s.query(Attempt).filter_by(exam_id=e.id, user_id=u.id).first()
+        if at: expire(at, s)
+        o = exam_out(e, s)
+        o["status"] = "submitted" if at and at.submitted else ("in_progress" if at else "new")
+        o["attempt"] = at.id if at else None
+        if at and at.submitted and e.show_results:
+            o["score"] = at.score
+            o["passed"] = at.score >= (e.pass_pct / 100 * o["total"])
+            o["pending"] = at.pending
+        out.append(o)
     return out
 
 @app.post("/api/exams/{eid}/start")
@@ -518,9 +517,10 @@ def start(eid: int, request: Request, u=Depends(me), s: Session = Depends(db)):
     e = assigned_exam(eid, u, s); check_seb(e, request)
     at = s.query(Attempt).filter_by(exam_id=eid, user_id=u.id).first()
     if not at:
-        if not (e.start <= now() <= e.end):
-            raise HTTPException(403, "Exam is not open right now")
-        at = Attempt(exam_id=eid, user_id=u.id, deadline=min(now() + timedelta(minutes=e.duration), e.end))
+        calc_deadline = now() + timedelta(minutes=e.duration)
+        if e.end and e.end > now():
+            calc_deadline = min(calc_deadline, e.end)
+        at = Attempt(exam_id=eid, user_id=u.id, deadline=calc_deadline)
         s.add(at); s.commit()
     expire(at, s)
     if at.submitted:

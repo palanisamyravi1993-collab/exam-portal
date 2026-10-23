@@ -61,8 +61,8 @@ def seed(s, hash_pw, User, Exam, Question):
     s.commit()
     fac = s.query(User).filter_by(username="faculty1").one()
     ids = [x.id for x in s.query(User).filter_by(role="student")]
-    e = Exam(title="GATE Aptitude I - CIAT (Probability + Data Structures)", subject="GATE", start=datetime.utcnow() - timedelta(hours=1), end=datetime.utcnow() + timedelta(days=30),
-             duration=90, pass_pct=40, published=True, show_results=False, seb_required=False, public=True, access_code="GATE2026", assigned=ids, created_by=fac.id)
+    e = Exam(title="GATE Aptitude I - CIAT (Probability + Data Structures)", subject="GATE", start=datetime.utcnow() - timedelta(days=30), end=datetime.utcnow() + timedelta(days=365),
+             duration=90, pass_pct=40, published=True, show_results=True, seb_required=False, public=True, access_code="GATE2026", assigned=ids, created_by=fac.id)
     s.add(e); s.commit()
     for i, (t, q, o, a, m, n) in enumerate(QS, 1): s.add(Question(exam_id=e.id, pos=i, text=q, qtype=t, options=o, answer=a, marks=m, neg=n, subject="Probability" if i<14 else "Data Structures"))
     s.commit()
